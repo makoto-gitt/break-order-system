@@ -1,350 +1,344 @@
-// ===== DATA LAYER =====
-const STORAGE_KEYS = {
-    staff: 'breakSystem_staff',
-    checks: 'breakSystem_checks',
-    history: 'breakSystem_history',
-};
+/* ============================================================
+   BREAK//ORDER — Application Logic
+   ============================================================ */
 
-function loadData(key) {
-    try {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : null;
-    } catch {
-        return null;
+// ===== AMBIENT BACKGROUND ====================================
+const canvas = document.getElementById('bgCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Subtle floating dots with soft connections
+const dots = [];
+const DOT_COUNT = 45;
+
+class Dot {
+    constructor() { this.init(); }
+    init() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.r = Math.random() * 1.2 + .4;
+        this.vx = (Math.random() - .5) * .18;
+        this.vy = (Math.random() - .5) * .18;
+        this.alpha = Math.random() * .3 + .08;
+        this.hue = Math.random() > .75 ? 330 : 185;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < -20 || this.x > canvas.width + 20 ||
+            this.y < -20 || this.y > canvas.height + 20) this.init();
+    }
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${this.hue},80%,65%,${this.alpha})`;
+        ctx.fill();
     }
 }
 
-function saveData(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
-}
+for (let i = 0; i < DOT_COUNT; i++) dots.push(new Dot());
 
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-// ===== STATE =====
-let staffList = loadData(STORAGE_KEYS.staff) || [];
-let breakChecks = loadData(STORAGE_KEYS.checks) || [];
-let historyList = loadData(STORAGE_KEYS.history) || [];
-
-function persist() {
-    saveData(STORAGE_KEYS.staff, staffList);
-    saveData(STORAGE_KEYS.checks, breakChecks);
-    saveData(STORAGE_KEYS.history, historyList);
-}
-
-// ===== TAB NAVIGATION =====
-const tabBtns = document.querySelectorAll('.tab-btn');
-const tabPanels = document.querySelectorAll('.tab-panel');
-const tabIndicator = document.getElementById('tabIndicator');
-
-function switchTab(tabName) {
-    tabBtns.forEach((btn, i) => {
-        const isActive = btn.dataset.tab === tabName;
-        btn.classList.toggle('active', isActive);
-        if (isActive) {
-            tabIndicator.style.transform = `translateX(${i * 100}%)`;
+function renderBg() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    dots.forEach(d => { d.update(); d.draw(); });
+    // connections
+    for (let i = 0; i < dots.length; i++) {
+        for (let j = i + 1; j < dots.length; j++) {
+            const dx = dots[i].x - dots[j].x;
+            const dy = dots[i].y - dots[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 100) {
+                ctx.beginPath();
+                ctx.moveTo(dots[i].x, dots[i].y);
+                ctx.lineTo(dots[j].x, dots[j].y);
+                ctx.strokeStyle = `rgba(34,211,238,${.03 * (1 - dist / 100)})`;
+                ctx.lineWidth = .4;
+                ctx.stroke();
+            }
         }
-    });
+    }
+    requestAnimationFrame(renderBg);
+}
+renderBg();
 
-    tabPanels.forEach(panel => {
-        panel.classList.toggle('active', panel.id === `panel-${tabName}`);
-    });
+// ===== LIVE CLOCK ============================================
+const clockEl = document.getElementById('liveClock');
+function tickClock() {
+    const now = new Date();
+    clockEl.textContent = now.toLocaleTimeString('ja-JP', { hour12: false });
+}
+tickClock();
+setInterval(tickClock, 1000);
 
-    // Refresh tab content
-    if (tabName === 'roster') renderRoster();
-    if (tabName === 'check') renderCheckList();
-    if (tabName === 'order') clearOrderResult();
-    if (tabName === 'history') renderHistory();
+// ===== DATA LAYER ============================================
+const KEYS = {
+    staff: 'bo_staff',
+    checks: 'bo_checks',
+    history: 'bo_history',
+};
+
+const load = k => { try { return JSON.parse(localStorage.getItem(k)) || null; } catch { return null; } };
+const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+let staff = load(KEYS.staff) || [];
+let checks = load(KEYS.checks) || [];
+let history = load(KEYS.history) || [];
+
+function persist() { save(KEYS.staff, staff); save(KEYS.checks, checks); save(KEYS.history, history); }
+
+// ===== TABS ==================================================
+const tabBtns = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.panel');
+const tabInk = document.getElementById('tabInk');
+
+function switchTab(name) {
+    tabBtns.forEach((b, i) => {
+        const on = b.dataset.tab === name;
+        b.classList.toggle('active', on);
+        if (on) tabInk.style.transform = `translateX(${i * 100}%)`;
+    });
+    panels.forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+
+    if (name === 'roster') renderRoster();
+    if (name === 'check') renderChecks();
+    if (name === 'order') hideOrder();
+    if (name === 'history') renderHistory();
 }
 
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-});
+tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
-// ===== TAB 1: 名簿管理 =====
-const staffNameInput = document.getElementById('staffNameInput');
-const addStaffBtn = document.getElementById('addStaffBtn');
-const pharmacistListEl = document.getElementById('pharmacistList');
-const clerkListEl = document.getElementById('clerkList');
-const pharmacistCountEl = document.getElementById('pharmacistCount');
-const clerkCountEl = document.getElementById('clerkCount');
+// ===== ROSTER ================================================
+const nameInput = document.getElementById('staffNameInput');
+const addBtn = document.getElementById('addStaffBtn');
+const pharmaList = document.getElementById('pharmacistList');
+const clerkList = document.getElementById('clerkList');
+const pharmaCount = document.getElementById('pharmacistCount');
+const clerkCount = document.getElementById('clerkCount');
+const pharmaEmpty = document.getElementById('pharmacistEmpty');
+const clerkEmpty = document.getElementById('clerkEmpty');
 
-function getStaffByRole(role) {
-    return staffList.filter(s => s.role === role);
-}
+const byRole = r => staff.filter(s => s.role === r);
 
 function renderRoster() {
-    const pharmacists = getStaffByRole('pharmacist');
-    const clerks = getStaffByRole('clerk');
+    const ph = byRole('pharmacist'), cl = byRole('clerk');
+    pharmaCount.textContent = ph.length;
+    clerkCount.textContent = cl.length;
+    pharmaList.innerHTML = ph.map((s, i) => rosterRow(s, i)).join('');
+    clerkList.innerHTML = cl.map((s, i) => rosterRow(s, i)).join('');
+    pharmaEmpty.classList.toggle('show', !ph.length);
+    clerkEmpty.classList.toggle('show', !cl.length);
 
-    pharmacistCountEl.textContent = pharmacists.length;
-    clerkCountEl.textContent = clerks.length;
-
-    pharmacistListEl.innerHTML = pharmacists.map(s => staffItemHTML(s)).join('');
-    clerkListEl.innerHTML = clerks.map(s => staffItemHTML(s)).join('');
-
-    // Attach events
-    document.querySelectorAll('.edit-staff-btn').forEach(btn => {
-        btn.addEventListener('click', () => openEditModal(btn.dataset.id));
-    });
-    document.querySelectorAll('.delete-staff-btn').forEach(btn => {
-        btn.addEventListener('click', () => deleteStaff(btn.dataset.id));
-    });
+    document.querySelectorAll('.edit-btn').forEach(b =>
+        b.addEventListener('click', () => openEdit(b.dataset.id)));
+    document.querySelectorAll('.del-btn').forEach(b =>
+        b.addEventListener('click', () => delStaff(b.dataset.id)));
 }
 
-function staffItemHTML(staff) {
-    return `
-    <li class="staff-item">
-      <span class="name">${escapeHTML(staff.name)}</span>
-      <div class="actions">
-        <button class="icon-btn edit-staff-btn" data-id="${staff.id}" title="編集">✎</button>
-        <button class="icon-btn delete-btn delete-staff-btn" data-id="${staff.id}" title="削除">✕</button>
-      </div>
-    </li>`;
+function rosterRow(s, i) {
+    return `<li class="staff-row" style="animation-delay:${i * .03}s">
+    <span class="name">${esc(s.name)}</span>
+    <span class="row-actions">
+      <button class="ico-btn edit-btn" data-id="${s.id}" title="編集">✎</button>
+      <button class="ico-btn del del-btn" data-id="${s.id}" title="削除">✕</button>
+    </span>
+  </li>`;
 }
 
 function addStaff() {
-    const name = staffNameInput.value.trim();
-    if (!name) {
-        staffNameInput.focus();
-        return;
-    }
-    const role = document.querySelector('input[name="staffRole"]:checked').value;
-    staffList.push({ id: generateId(), name, role });
+    const n = nameInput.value.trim();
+    if (!n) { nameInput.focus(); return; }
+    const r = document.querySelector('[name=staffRole]:checked').value;
+    staff.push({ id: uid(), name: n, role: r });
     persist();
-    staffNameInput.value = '';
-    staffNameInput.focus();
+    nameInput.value = '';
+    nameInput.focus();
     renderRoster();
 }
 
-function deleteStaff(id) {
+function delStaff(id) {
     if (!confirm('このスタッフを削除しますか？')) return;
-    staffList = staffList.filter(s => s.id !== id);
-    breakChecks = breakChecks.filter(cid => cid !== id);
+    staff = staff.filter(s => s.id !== id);
+    checks = checks.filter(c => c !== id);
     persist();
     renderRoster();
 }
 
-addStaffBtn.addEventListener('click', addStaff);
-staffNameInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') addStaff();
-});
+addBtn.addEventListener('click', addStaff);
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addStaff(); });
 
-// ===== EDIT MODAL =====
-const editModal = document.getElementById('editModal');
-const editNameInput = document.getElementById('editNameInput');
-const editStaffIdInput = document.getElementById('editStaffId');
-const saveEditBtn = document.getElementById('saveEditBtn');
-const cancelEditBtn = document.getElementById('cancelEditBtn');
+// ===== EDIT MODAL ============================================
+const modal = document.getElementById('editModal');
+const editIdEl = document.getElementById('editStaffId');
+const editNameEl = document.getElementById('editNameInput');
+const saveBtn = document.getElementById('saveEditBtn');
+const cancelBtn = document.getElementById('cancelEditBtn');
+const closeBtn = document.getElementById('modalCloseBtn');
 
-function openEditModal(id) {
-    const staff = staffList.find(s => s.id === id);
-    if (!staff) return;
-    editStaffIdInput.value = id;
-    editNameInput.value = staff.name;
-    document.querySelector(`input[name="editRole"][value="${staff.role}"]`).checked = true;
-    editModal.classList.add('show');
-    editNameInput.focus();
+function openEdit(id) {
+    const s = staff.find(x => x.id === id);
+    if (!s) return;
+    editIdEl.value = id;
+    editNameEl.value = s.name;
+    document.querySelector(`[name=editRole][value=${s.role}]`).checked = true;
+    modal.classList.add('show');
+    setTimeout(() => editNameEl.focus(), 80);
 }
 
-function closeEditModal() {
-    editModal.classList.remove('show');
-}
+function closeModal() { modal.classList.remove('show'); }
 
-saveEditBtn.addEventListener('click', () => {
-    const id = editStaffIdInput.value;
-    const name = editNameInput.value.trim();
-    if (!name) return;
-    const role = document.querySelector('input[name="editRole"]:checked').value;
-    const staff = staffList.find(s => s.id === id);
-    if (staff) {
-        staff.name = name;
-        staff.role = role;
-        persist();
-        renderRoster();
-    }
-    closeEditModal();
+saveBtn.addEventListener('click', () => {
+    const id = editIdEl.value, n = editNameEl.value.trim();
+    if (!n) return;
+    const r = document.querySelector('[name=editRole]:checked').value;
+    const s = staff.find(x => x.id === id);
+    if (s) { s.name = n; s.role = r; persist(); renderRoster(); }
+    closeModal();
 });
 
-cancelEditBtn.addEventListener('click', closeEditModal);
-editModal.addEventListener('click', e => {
-    if (e.target === editModal) closeEditModal();
-});
+cancelBtn.addEventListener('click', closeModal);
+closeBtn.addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-// ===== TAB 2: 休憩チェック =====
-const pharmacistCheckListEl = document.getElementById('pharmacistCheckList');
-const clerkCheckListEl = document.getElementById('clerkCheckList');
-const pharmacistCheckCountEl = document.getElementById('pharmacistCheckCount');
-const clerkCheckCountEl = document.getElementById('clerkCheckCount');
+// ===== CHECKS ================================================
+const phCheckList = document.getElementById('pharmacistCheckList');
+const clCheckList = document.getElementById('clerkCheckList');
+const phCheckCount = document.getElementById('pharmacistCheckCount');
+const clCheckCount = document.getElementById('clerkCheckCount');
 const checkAllBtn = document.getElementById('checkAllBtn');
-const uncheckAllBtn = document.getElementById('uncheckAllBtn');
+const uncheckBtn = document.getElementById('uncheckAllBtn');
 
-function renderCheckList() {
-    const pharmacists = getStaffByRole('pharmacist');
-    const clerks = getStaffByRole('clerk');
-
-    const checkedPharmacists = pharmacists.filter(s => breakChecks.includes(s.id));
-    const checkedClerks = clerks.filter(s => breakChecks.includes(s.id));
-
-    pharmacistCheckCountEl.textContent = `${checkedPharmacists.length}/${pharmacists.length}`;
-    clerkCheckCountEl.textContent = `${checkedClerks.length}/${clerks.length}`;
-
-    pharmacistCheckListEl.innerHTML = pharmacists.map(s => checkItemHTML(s)).join('');
-    clerkCheckListEl.innerHTML = clerks.map(s => checkItemHTML(s)).join('');
-
-    // Attach events
-    document.querySelectorAll('.check-item').forEach(item => {
-        item.addEventListener('click', () => toggleCheck(item.dataset.id));
-    });
+function renderChecks() {
+    const ph = byRole('pharmacist'), cl = byRole('clerk');
+    const phOn = ph.filter(s => checks.includes(s.id));
+    const clOn = cl.filter(s => checks.includes(s.id));
+    phCheckCount.textContent = `${phOn.length}/${ph.length}`;
+    clCheckCount.textContent = `${clOn.length}/${cl.length}`;
+    phCheckList.innerHTML = ph.map((s, i) => chkRow(s, i)).join('');
+    clCheckList.innerHTML = cl.map((s, i) => chkRow(s, i)).join('');
+    document.querySelectorAll('.chk-row').forEach(el =>
+        el.addEventListener('click', () => toggle(el.dataset.id)));
 }
 
-function checkItemHTML(staff) {
-    const isChecked = breakChecks.includes(staff.id);
-    return `
-    <li class="check-item ${isChecked ? 'checked' : ''}" data-id="${staff.id}">
-      <span class="cyber-checkbox">${isChecked ? '✓' : ''}</span>
-      <span class="name">${escapeHTML(staff.name)}</span>
-    </li>`;
+function chkRow(s, i) {
+    const on = checks.includes(s.id);
+    return `<li class="chk-row ${on ? 'on' : ''}" data-id="${s.id}" style="animation-delay:${i * .03}s">
+    <span class="chk-box">${on ? '✓' : ''}</span>
+    <span class="name">${esc(s.name)}</span>
+  </li>`;
 }
 
-function toggleCheck(id) {
-    if (breakChecks.includes(id)) {
-        breakChecks = breakChecks.filter(cid => cid !== id);
-    } else {
-        breakChecks.push(id);
-    }
+function toggle(id) {
+    checks = checks.includes(id) ? checks.filter(c => c !== id) : [...checks, id];
     persist();
-    renderCheckList();
+    renderChecks();
 }
 
-checkAllBtn.addEventListener('click', () => {
-    breakChecks = staffList.map(s => s.id);
-    persist();
-    renderCheckList();
-});
+checkAllBtn.addEventListener('click', () => { checks = staff.map(s => s.id); persist(); renderChecks(); });
+uncheckBtn.addEventListener('click', () => { checks = []; persist(); renderChecks(); });
 
-uncheckAllBtn.addEventListener('click', () => {
-    breakChecks = [];
-    persist();
-    renderCheckList();
-});
-
-// ===== TAB 3: 順番表示 =====
-const generateBtn = document.getElementById('generateBtn');
+// ===== ORDER =================================================
+const genBtn = document.getElementById('generateBtn');
+const genHint = document.getElementById('genHint');
 const orderResult = document.getElementById('orderResult');
-const pharmacistOrderListEl = document.getElementById('pharmacistOrderList');
-const clerkOrderListEl = document.getElementById('clerkOrderList');
+const orderStamp = document.getElementById('orderStamp');
+const phOrderList = document.getElementById('pharmacistOrderList');
+const clOrderList = document.getElementById('clerkOrderList');
 
-function shuffleArray(arr) {
-    const shuffled = [...arr];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+function shuffle(a) {
+    const b = [...a];
+    for (let i = b.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        [b[i], b[j]] = [b[j], b[i]];
     }
-    return shuffled;
+    return b;
 }
 
-function generateOrder() {
-    const checkedStaff = staffList.filter(s => breakChecks.includes(s.id));
-    if (checkedStaff.length === 0) {
-        alert('休憩チェックされているスタッフがいません。\n「休憩チェック」タブでチェックしてください。');
+function generate() {
+    const sel = staff.filter(s => checks.includes(s.id));
+    if (!sel.length) {
+        genHint.textContent = '⚠ チェック済みスタッフがいません';
+        genHint.style.color = 'var(--red)';
+        setTimeout(() => { genHint.textContent = ''; genHint.style.color = ''; }, 2500);
         return;
     }
 
-    const pharmacists = shuffleArray(checkedStaff.filter(s => s.role === 'pharmacist'));
-    const clerks = shuffleArray(checkedStaff.filter(s => s.role === 'clerk'));
+    const ph = shuffle(sel.filter(s => s.role === 'pharmacist'));
+    const cl = shuffle(sel.filter(s => s.role === 'clerk'));
+    const ts = new Date().toLocaleString('ja-JP', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
 
-    // Display results
     orderResult.style.display = 'block';
+    orderStamp.textContent = `Generated: ${ts}`;
 
-    pharmacistOrderListEl.innerHTML = pharmacists.length > 0
-        ? pharmacists.map((s, i) => orderItemHTML(s, i + 1)).join('')
-        : '<li class="empty-message">該当なし</li>';
+    phOrderList.innerHTML = ph.length
+        ? ph.map((s, i) => `<li class="order-row" style="animation-delay:${i * .07}s">
+        <span class="order-num">${i + 1}</span><span class="name">${esc(s.name)}</span></li>`).join('')
+        : '<li class="col-empty show">該当なし</li>';
 
-    clerkOrderListEl.innerHTML = clerks.length > 0
-        ? clerks.map((s, i) => orderItemHTML(s, i + 1)).join('')
-        : '<li class="empty-message">該当なし</li>';
+    clOrderList.innerHTML = cl.length
+        ? cl.map((s, i) => `<li class="order-row" style="animation-delay:${i * .07}s">
+        <span class="order-num">${i + 1}</span><span class="name">${esc(s.name)}</span></li>`).join('')
+        : '<li class="col-empty show">該当なし</li>';
 
-    // Save to history
-    const entry = {
-        id: generateId(),
-        timestamp: new Date().toLocaleString('ja-JP', {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-        }),
-        pharmacists: pharmacists.map(s => s.name),
-        clerks: clerks.map(s => s.name),
-    };
-
-    historyList.unshift(entry);
+    history.unshift({ id: uid(), timestamp: ts, pharmacists: ph.map(s => s.name), clerks: cl.map(s => s.name) });
     persist();
+
+    genHint.textContent = '✓ 生成完了 — 履歴に保存しました';
+    genHint.style.color = 'var(--green)';
+    setTimeout(() => { genHint.textContent = ''; genHint.style.color = ''; }, 2500);
 }
 
-function orderItemHTML(staff, num) {
-    return `
-    <li class="order-item">
-      <span class="order-number">${num}</span>
-      <span class="name">${escapeHTML(staff.name)}</span>
-    </li>`;
-}
+function hideOrder() { orderResult.style.display = 'none'; }
 
-function clearOrderResult() {
-    orderResult.style.display = 'none';
-    pharmacistOrderListEl.innerHTML = '';
-    clerkOrderListEl.innerHTML = '';
-}
+genBtn.addEventListener('click', generate);
 
-generateBtn.addEventListener('click', generateOrder);
-
-// ===== TAB 4: 履歴 =====
-const historyListEl = document.getElementById('historyList');
-const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+// ===== HISTORY ===============================================
+const histListEl = document.getElementById('historyList');
+const clearBtn = document.getElementById('clearHistoryBtn');
 
 function renderHistory() {
-    if (historyList.length === 0) {
-        historyListEl.innerHTML = '<p class="empty-message">履歴がありません</p>';
+    if (!history.length) {
+        histListEl.innerHTML = `<div class="empty-state">
+      <div class="empty-glyph">⏳</div>
+      <p class="empty-msg">履歴がありません</p></div>`;
         return;
     }
-
-    historyListEl.innerHTML = historyList.map(entry => `
-    <div class="history-entry">
-      <div class="history-timestamp">${escapeHTML(entry.timestamp)}</div>
-      <div class="history-columns">
+    histListEl.innerHTML = history.map((e, i) => `
+    <div class="history-card" style="animation-delay:${i * .04}s">
+      <div class="hist-time">${esc(e.timestamp)}</div>
+      <div class="hist-cols">
         <div>
-          <div class="history-col-title pharmacist">💊 薬剤師</div>
-          <ol class="history-names">
-            ${entry.pharmacists.length > 0
-            ? entry.pharmacists.map(n => `<li>${escapeHTML(n)}</li>`).join('')
-            : '<li style="color:var(--text-secondary)">なし</li>'}
-          </ol>
+          <div class="hist-col-head ph">💊 薬剤師</div>
+          <ol class="hist-names">${e.pharmacists.length
+            ? e.pharmacists.map(n => `<li>${esc(n)}</li>`).join('')
+            : '<li style="color:var(--text-3)">なし</li>'}</ol>
         </div>
         <div>
-          <div class="history-col-title clerk">📋 事務</div>
-          <ol class="history-names">
-            ${entry.clerks.length > 0
-            ? entry.clerks.map(n => `<li>${escapeHTML(n)}</li>`).join('')
-            : '<li style="color:var(--text-secondary)">なし</li>'}
-          </ol>
+          <div class="hist-col-head ck">📋 事務</div>
+          <ol class="hist-names">${e.clerks.length
+            ? e.clerks.map(n => `<li>${esc(n)}</li>`).join('')
+            : '<li style="color:var(--text-3)">なし</li>'}</ol>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
-clearHistoryBtn.addEventListener('click', () => {
+clearBtn.addEventListener('click', () => {
     if (!confirm('すべての履歴を削除しますか？')) return;
-    historyList = [];
+    history = [];
     persist();
     renderHistory();
 });
 
-// ===== UTILS =====
-function escapeHTML(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-// ===== INIT =====
+// ===== INIT ==================================================
 renderRoster();

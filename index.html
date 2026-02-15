@@ -4,195 +4,238 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>休憩順番決めシステム | BREAK ORDER SYSTEM</title>
+    <title>BREAK//ORDER — 休憩順番決めシステム</title>
     <meta name="description" content="薬局スタッフの休憩順番をランダムに決定するシステム">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;500;700&family=Share+Tech+Mono&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div class="scanline-overlay"></div>
-    <div class="grid-bg"></div>
+    <canvas id="bgCanvas"></canvas>
 
-    <header class="header">
-        <div class="header-glitch" data-text="BREAK ORDER SYSTEM">BREAK ORDER SYSTEM</div>
-        <p class="header-sub">休憩順番決めシステム v2.0</p>
-    </header>
-
-    <nav class="tab-nav" id="tabNav">
-        <button class="tab-btn active" data-tab="roster">
-            <span class="tab-icon">&#9776;</span>
-            <span class="tab-label">名簿管理</span>
-        </button>
-        <button class="tab-btn" data-tab="check">
-            <span class="tab-icon">&#10003;</span>
-            <span class="tab-label">休憩チェック</span>
-        </button>
-        <button class="tab-btn" data-tab="order">
-            <span class="tab-icon">&#9733;</span>
-            <span class="tab-label">順番表示</span>
-        </button>
-        <button class="tab-btn" data-tab="history">
-            <span class="tab-icon">&#9201;</span>
-            <span class="tab-label">履歴</span>
-        </button>
-        <div class="tab-indicator" id="tabIndicator"></div>
-    </nav>
-
-    <main class="main-content">
-        <!-- Tab 1: 名簿管理 -->
-        <section class="tab-panel active" id="panel-roster">
-            <div class="panel-header">
-                <h2 class="panel-title"><span class="neon-text">名簿管理</span></h2>
-                <p class="panel-desc">スタッフの追加・編集・削除</p>
+    <div class="app-shell">
+        <!-- ===== TOP BAR ===== -->
+        <div class="topbar">
+            <div class="topbar-left">
+                <div class="logo-mark">
+                    <div class="logo-hex"></div>
+                    <div class="logo-dot"></div>
+                </div>
+                <div class="logo-text">
+                    <span class="logo-main">BREAK<span class="logo-slash">//</span>ORDER</span>
+                    <span class="logo-ver">SYS.v3 — 休憩順番管理</span>
+                </div>
             </div>
+            <div class="topbar-right">
+                <div class="topbar-clock" id="liveClock">--:--:--</div>
+                <div class="topbar-status"><span class="status-dot"></span>ACTIVE</div>
+            </div>
+        </div>
 
-            <div class="add-staff-form" id="addStaffForm">
-                <div class="form-row">
-                    <div class="input-group">
-                        <input type="text" id="staffNameInput" class="cyber-input" placeholder="スタッフ名を入力..."
-                            autocomplete="off">
-                        <div class="input-glow"></div>
+        <!-- ===== TABS ===== -->
+        <nav class="tabs" id="tabNav">
+            <button class="tab active" data-tab="roster">
+                <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                </svg>
+                <span class="tab-text">名簿管理</span>
+            </button>
+            <button class="tab" data-tab="check">
+                <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span class="tab-text">休憩チェック</span>
+            </button>
+            <button class="tab" data-tab="order">
+                <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+                <span class="tab-text">順番生成</span>
+            </button>
+            <button class="tab" data-tab="history">
+                <svg class="tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span class="tab-text">履歴</span>
+            </button>
+            <div class="tab-ink" id="tabInk"></div>
+        </nav>
+
+        <!-- ===== PANELS ===== -->
+        <main class="panels">
+
+            <!-- PANEL: 名簿管理 -->
+            <section class="panel active" id="panel-roster">
+                <header class="sec-head">
+                    <h2 class="sec-title">名簿管理</h2>
+                    <p class="sec-sub">スタッフの追加・編集・削除</p>
+                </header>
+
+                <div class="card form-card">
+                    <div class="card-accent"></div>
+                    <div class="form-inner">
+                        <input type="text" id="staffNameInput" class="input" placeholder="スタッフ名を入力"
+                            autocomplete="off" />
+                        <div class="role-toggle">
+                            <label class="role-label">
+                                <input type="radio" name="staffRole" value="pharmacist" checked />
+                                <span class="role-pill pharma">💊 薬剤師</span>
+                            </label>
+                            <label class="role-label">
+                                <input type="radio" name="staffRole" value="clerk" />
+                                <span class="role-pill clerk">📋 事務</span>
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" id="addStaffBtn">追加</button>
                     </div>
-                    <div class="role-selector">
-                        <label class="role-option">
-                            <input type="radio" name="staffRole" value="pharmacist" checked>
-                            <span class="role-chip pharmacist-chip">💊 薬剤師</span>
-                        </label>
-                        <label class="role-option">
-                            <input type="radio" name="staffRole" value="clerk">
-                            <span class="role-chip clerk-chip">📋 事務</span>
-                        </label>
+                </div>
+
+                <div class="dual-col">
+                    <div class="col col-pharma">
+                        <div class="col-head">
+                            <span class="col-label">💊 薬剤師</span>
+                            <span class="col-count" id="pharmacistCount">0</span>
+                        </div>
+                        <ul class="item-list" id="pharmacistList"></ul>
+                        <p class="col-empty" id="pharmacistEmpty">未登録</p>
                     </div>
-                    <button class="cyber-btn add-btn" id="addStaffBtn">
-                        <span class="btn-text">追加</span>
-                        <span class="btn-glitch"></span>
+                    <div class="col col-clerk">
+                        <div class="col-head">
+                            <span class="col-label">📋 事務</span>
+                            <span class="col-count" id="clerkCount">0</span>
+                        </div>
+                        <ul class="item-list" id="clerkList"></ul>
+                        <p class="col-empty" id="clerkEmpty">未登録</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANEL: 休憩チェック -->
+            <section class="panel" id="panel-check">
+                <header class="sec-head">
+                    <h2 class="sec-title">休憩チェック</h2>
+                    <p class="sec-sub">本日休憩を取るスタッフを選択</p>
+                </header>
+
+                <div class="toolbar">
+                    <button class="btn btn-sm" id="checkAllBtn">全選択</button>
+                    <button class="btn btn-sm btn-ghost" id="uncheckAllBtn">全解除</button>
+                </div>
+
+                <div class="dual-col">
+                    <div class="col col-pharma">
+                        <div class="col-head">
+                            <span class="col-label">💊 薬剤師</span>
+                            <span class="col-count" id="pharmacistCheckCount">0/0</span>
+                        </div>
+                        <ul class="item-list" id="pharmacistCheckList"></ul>
+                    </div>
+                    <div class="col col-clerk">
+                        <div class="col-head">
+                            <span class="col-label">📋 事務</span>
+                            <span class="col-count" id="clerkCheckCount">0/0</span>
+                        </div>
+                        <ul class="item-list" id="clerkCheckList"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANEL: 順番生成 -->
+            <section class="panel" id="panel-order">
+                <header class="sec-head">
+                    <h2 class="sec-title">順番生成</h2>
+                    <p class="sec-sub">チェック済みスタッフをランダムに並べ替え</p>
+                </header>
+
+                <div class="gen-zone">
+                    <button class="gen-btn" id="generateBtn">
+                        <div class="gen-btn-bg"></div>
+                        <svg class="gen-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                            stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        <span class="gen-text">順番を生成</span>
+                    </button>
+                    <p class="gen-hint" id="genHint"></p>
+                </div>
+
+                <div class="order-result" id="orderResult" style="display:none">
+                    <div class="order-stamp" id="orderStamp"></div>
+                    <div class="dual-col">
+                        <div class="col col-pharma">
+                            <div class="col-head"><span class="col-label">💊 薬剤師</span></div>
+                            <ol class="item-list" id="pharmacistOrderList"></ol>
+                        </div>
+                        <div class="col col-clerk">
+                            <div class="col-head"><span class="col-label">📋 事務</span></div>
+                            <ol class="item-list" id="clerkOrderList"></ol>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANEL: 履歴 -->
+            <section class="panel" id="panel-history">
+                <header class="sec-head">
+                    <h2 class="sec-title">履歴</h2>
+                    <p class="sec-sub">過去の生成ログ</p>
+                </header>
+
+                <div class="toolbar">
+                    <button class="btn btn-sm btn-danger" id="clearHistoryBtn">
+                        <svg viewBox="0 0 20 20" width="13" height="13" fill="currentColor" style="margin-right:4px">
+                            <path
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9z" />
+                        </svg>
+                        クリア
                     </button>
                 </div>
-            </div>
 
-            <div class="staff-lists">
-                <div class="staff-column">
-                    <h3 class="column-title pharmacist-title">
-                        <span class="column-icon">💊</span> 薬剤師
-                        <span class="count-badge" id="pharmacistCount">0</span>
-                    </h3>
-                    <ul class="staff-list" id="pharmacistList"></ul>
-                </div>
-                <div class="staff-column">
-                    <h3 class="column-title clerk-title">
-                        <span class="column-icon">📋</span> 事務
-                        <span class="count-badge" id="clerkCount">0</span>
-                    </h3>
-                    <ul class="staff-list" id="clerkList"></ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- Tab 2: 休憩チェック -->
-        <section class="tab-panel" id="panel-check">
-            <div class="panel-header">
-                <h2 class="panel-title"><span class="neon-text">休憩チェック</span></h2>
-                <p class="panel-desc">今日休憩が必要なスタッフにチェック</p>
-            </div>
-
-            <div class="check-actions">
-                <button class="cyber-btn small-btn" id="checkAllBtn">全員チェック</button>
-                <button class="cyber-btn small-btn outline-btn" id="uncheckAllBtn">全員解除</button>
-            </div>
-
-            <div class="staff-lists">
-                <div class="staff-column">
-                    <h3 class="column-title pharmacist-title">
-                        <span class="column-icon">💊</span> 薬剤師
-                        <span class="count-badge" id="pharmacistCheckCount">0</span>
-                    </h3>
-                    <ul class="check-list" id="pharmacistCheckList"></ul>
-                </div>
-                <div class="staff-column">
-                    <h3 class="column-title clerk-title">
-                        <span class="column-icon">📋</span> 事務
-                        <span class="count-badge" id="clerkCheckCount">0</span>
-                    </h3>
-                    <ul class="check-list" id="clerkCheckList"></ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- Tab 3: 順番表示 -->
-        <section class="tab-panel" id="panel-order">
-            <div class="panel-header">
-                <h2 class="panel-title"><span class="neon-text">順番表示</span></h2>
-                <p class="panel-desc">ランダムに休憩順番を生成</p>
-            </div>
-
-            <div class="generate-section">
-                <button class="cyber-btn generate-btn" id="generateBtn">
-                    <span class="btn-icon">⚡</span>
-                    <span class="btn-text">順番を生成</span>
-                </button>
-            </div>
-
-            <div class="order-result" id="orderResult" style="display:none;">
-                <div class="staff-lists">
-                    <div class="staff-column">
-                        <h3 class="column-title pharmacist-title">
-                            <span class="column-icon">💊</span> 薬剤師
-                        </h3>
-                        <ol class="order-list" id="pharmacistOrderList"></ol>
-                    </div>
-                    <div class="staff-column">
-                        <h3 class="column-title clerk-title">
-                            <span class="column-icon">📋</span> 事務
-                        </h3>
-                        <ol class="order-list" id="clerkOrderList"></ol>
+                <div id="historyList">
+                    <div class="empty-state">
+                        <div class="empty-glyph">⏳</div>
+                        <p class="empty-msg">履歴がありません</p>
                     </div>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- Tab 4: 履歴 -->
-        <section class="tab-panel" id="panel-history">
-            <div class="panel-header">
-                <h2 class="panel-title"><span class="neon-text">履歴</span></h2>
-                <p class="panel-desc">過去に生成した順番</p>
-            </div>
+        </main>
+    </div>
 
-            <div class="history-actions">
-                <button class="cyber-btn small-btn danger-btn" id="clearHistoryBtn">履歴をクリア</button>
+    <!-- EDIT MODAL -->
+    <div class="overlay" id="editModal">
+        <div class="modal">
+            <div class="modal-bar">
+                <span class="modal-title">スタッフ編集</span>
+                <button class="modal-x" id="modalCloseBtn">✕</button>
             </div>
-
-            <div class="history-list" id="historyList">
-                <p class="empty-message">履歴がありません</p>
+            <div class="modal-body">
+                <input type="hidden" id="editStaffId">
+                <label class="field-label">名前</label>
+                <input type="text" id="editNameInput" class="input" placeholder="名前を入力" />
+                <label class="field-label mt">役職</label>
+                <div class="role-toggle">
+                    <label class="role-label">
+                        <input type="radio" name="editRole" value="pharmacist" />
+                        <span class="role-pill pharma">💊 薬剤師</span>
+                    </label>
+                    <label class="role-label">
+                        <input type="radio" name="editRole" value="clerk" />
+                        <span class="role-pill clerk">📋 事務</span>
+                    </label>
+                </div>
             </div>
-        </section>
-    </main>
-
-    <!-- Edit Modal -->
-    <div class="modal-overlay" id="editModal">
-        <div class="modal-content">
-            <h3 class="modal-title">スタッフ編集</h3>
-            <input type="hidden" id="editStaffId">
-            <div class="input-group">
-                <input type="text" id="editNameInput" class="cyber-input" placeholder="名前">
-            </div>
-            <div class="role-selector modal-roles">
-                <label class="role-option">
-                    <input type="radio" name="editRole" value="pharmacist">
-                    <span class="role-chip pharmacist-chip">💊 薬剤師</span>
-                </label>
-                <label class="role-option">
-                    <input type="radio" name="editRole" value="clerk">
-                    <span class="role-chip clerk-chip">📋 事務</span>
-                </label>
-            </div>
-            <div class="modal-actions">
-                <button class="cyber-btn" id="saveEditBtn">保存</button>
-                <button class="cyber-btn outline-btn" id="cancelEditBtn">キャンセル</button>
+            <div class="modal-foot">
+                <button class="btn btn-primary" id="saveEditBtn">保存</button>
+                <button class="btn btn-ghost" id="cancelEditBtn">キャンセル</button>
             </div>
         </div>
     </div>
