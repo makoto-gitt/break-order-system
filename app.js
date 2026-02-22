@@ -109,7 +109,6 @@ function switchTab(name) {
 
     if (name === 'roster') renderRoster();
     if (name === 'check') renderChecks();
-    if (name === 'order') hideOrder();
     if (name === 'history') renderHistory();
 }
 
