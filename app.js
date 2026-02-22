@@ -81,6 +81,7 @@ const KEYS = {
     staff: 'bo_staff',
     checks: 'bo_checks',
     history: 'bo_history',
+    lastOrder: 'bo_lastOrder',
 };
 
 const load = k => { try { return JSON.parse(localStorage.getItem(k)) || null; } catch { return null; } };
@@ -109,6 +110,7 @@ function switchTab(name) {
 
     if (name === 'roster') renderRoster();
     if (name === 'check') renderChecks();
+    if (name === 'order') restoreOrder();
     if (name === 'history') renderHistory();
 }
 
@@ -276,20 +278,13 @@ function generate() {
         hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
 
-    orderResult.style.display = 'block';
-    orderStamp.textContent = `Generated: ${ts}`;
+    // Save last order for persistence across tab switches
+    const lastOrder = { timestamp: ts, pharmacists: ph.map(s => s.name), clerks: cl.map(s => s.name) };
+    save(KEYS.lastOrder, lastOrder);
 
-    phOrderList.innerHTML = ph.length
-        ? ph.map((s, i) => `<li class="order-row" style="animation-delay:${i * .07}s">
-        <span class="order-num">${i + 1}</span><span class="name">${esc(s.name)}</span></li>`).join('')
-        : '<li class="col-empty show">該当なし</li>';
+    showOrder(lastOrder);
 
-    clOrderList.innerHTML = cl.length
-        ? cl.map((s, i) => `<li class="order-row" style="animation-delay:${i * .07}s">
-        <span class="order-num">${i + 1}</span><span class="name">${esc(s.name)}</span></li>`).join('')
-        : '<li class="col-empty show">該当なし</li>';
-
-    history.unshift({ id: uid(), timestamp: ts, pharmacists: ph.map(s => s.name), clerks: cl.map(s => s.name) });
+    history.unshift({ id: uid(), timestamp: ts, pharmacists: lastOrder.pharmacists, clerks: lastOrder.clerks });
     persist();
 
     genHint.textContent = '✓ 生成完了 — 履歴に保存しました';
@@ -297,7 +292,27 @@ function generate() {
     setTimeout(() => { genHint.textContent = ''; genHint.style.color = ''; }, 2500);
 }
 
-function hideOrder() { orderResult.style.display = 'none'; }
+function showOrder(data) {
+    orderResult.style.display = 'block';
+    orderStamp.textContent = `Generated: ${data.timestamp}`;
+    phOrderList.innerHTML = data.pharmacists.length
+        ? data.pharmacists.map((n, i) => `<li class="order-row" style="animation-delay:${i * .07}s">
+        <span class="order-num">${i + 1}</span><span class="name">${esc(n)}</span></li>`).join('')
+        : '<li class="col-empty show">該当なし</li>';
+    clOrderList.innerHTML = data.clerks.length
+        ? data.clerks.map((n, i) => `<li class="order-row" style="animation-delay:${i * .07}s">
+        <span class="order-num">${i + 1}</span><span class="name">${esc(n)}</span></li>`).join('')
+        : '<li class="col-empty show">該当なし</li>';
+}
+
+function restoreOrder() {
+    const saved = load(KEYS.lastOrder);
+    if (saved) {
+        showOrder(saved);
+    } else {
+        orderResult.style.display = 'none';
+    }
+}
 
 genBtn.addEventListener('click', generate);
 
