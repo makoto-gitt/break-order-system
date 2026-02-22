@@ -1041,6 +1041,117 @@ body {
   border-top: 1px solid rgba(255, 255, 255, .05);
 }
 
+/* --- Roulette Animation ------------------------------------- */
+.roulette-zone {
+  margin-bottom: 1.6rem;
+}
+
+.roulette-label {
+  text-align: center;
+  font-family: var(--ff-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--cyan);
+  text-shadow: 0 0 12px var(--cyan-glow), 0 0 30px rgba(34, 211, 238, .15);
+  margin-bottom: 1rem;
+  animation: roulettePulse .6s ease-in-out infinite alternate;
+}
+
+@keyframes roulettePulse {
+  from {
+    opacity: .6;
+    text-shadow: 0 0 8px var(--cyan-glow);
+  }
+
+  to {
+    opacity: 1;
+    text-shadow: 0 0 20px var(--cyan-glow), 0 0 40px rgba(34, 211, 238, .2);
+  }
+}
+
+.roulette-col {
+  border-color: rgba(34, 211, 238, .15) !important;
+  box-shadow: 0 0 20px rgba(34, 211, 238, .06);
+}
+
+.roulette-slot {
+  position: relative;
+  overflow: hidden;
+  min-height: 48px;
+}
+
+.roulette-cell {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .5rem .65rem;
+  margin-bottom: .25rem;
+  border-radius: var(--r-sm);
+  font-size: .92rem;
+  font-weight: 500;
+  transition: all .15s;
+}
+
+.roulette-cell .order-num {
+  font-family: var(--ff-display);
+  font-weight: 700;
+  font-size: .72rem;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--cyan-soft);
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+
+.roulette-cell.spinning {
+  background: rgba(34, 211, 238, .04);
+  animation: slotSpin .08s steps(1) infinite;
+}
+
+@keyframes slotSpin {
+  0% {
+    opacity: .7;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: .7;
+  }
+}
+
+.roulette-cell.locked {
+  background: rgba(52, 211, 153, .08);
+  border: 1px solid rgba(52, 211, 153, .2);
+  animation: lockFlash .4s var(--ease);
+}
+
+@keyframes lockFlash {
+  0% {
+    background: rgba(52, 211, 153, .3);
+    box-shadow: 0 0 20px rgba(52, 211, 153, .3);
+    transform: scale(1.03);
+  }
+
+  100% {
+    background: rgba(52, 211, 153, .08);
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+.roulette-cell.locked .order-num {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
 /* --- Responsive -------------------------------------------- */
 @media(max-width:600px) {
   html {

@@ -252,6 +252,9 @@ const orderResult = document.getElementById('orderResult');
 const orderStamp = document.getElementById('orderStamp');
 const phOrderList = document.getElementById('pharmacistOrderList');
 const clOrderList = document.getElementById('clerkOrderList');
+const rouletteZone = document.getElementById('rouletteZone');
+const rouletteSlotPh = document.getElementById('rouletteSlotPh');
+const rouletteSlotCl = document.getElementById('rouletteSlotCl');
 
 function shuffle(a) {
     const b = [...a];
@@ -262,7 +265,11 @@ function shuffle(a) {
     return b;
 }
 
+let isGenerating = false;
+
 function generate() {
+    if (isGenerating) return;
+
     const sel = staff.filter(s => checks.includes(s.id));
     if (!sel.length) {
         genHint.textContent = '⚠ チェック済みスタッフがいません';
@@ -271,25 +278,108 @@ function generate() {
         return;
     }
 
+    isGenerating = true;
+    genBtn.style.pointerEvents = 'none';
+    genBtn.style.opacity = '.5';
+
     const ph = shuffle(sel.filter(s => s.role === 'pharmacist'));
     const cl = shuffle(sel.filter(s => s.role === 'clerk'));
-    const ts = new Date().toLocaleString('ja-JP', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
+    const allNames = sel.map(s => s.name);
+
+    // Hide previous result, show roulette
+    orderResult.style.display = 'none';
+    rouletteZone.style.display = 'block';
+
+    // Build slot cells for each column
+    const phSlots = ph.length;
+    const clSlots = cl.length;
+
+    function buildCells(container, count) {
+        container.innerHTML = '';
+        const cells = [];
+        for (let i = 0; i < count; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'roulette-cell spinning';
+            cell.innerHTML = `<span class="order-num">${i + 1}</span><span class="name">---</span>`;
+            container.appendChild(cell);
+            cells.push(cell);
+        }
+        return cells;
+    }
+
+    const phCells = buildCells(rouletteSlotPh, phSlots || 1);
+    const clCells = buildCells(rouletteSlotCl, clSlots || 1);
+
+    if (!phSlots) phCells[0].querySelector('.name').textContent = '該当なし';
+    if (!clSlots) clCells[0].querySelector('.name').textContent = '該当なし';
+
+    // Shuffle names rapidly in all spinning cells
+    const spinInterval = setInterval(() => {
+        phCells.forEach(cell => {
+            if (cell.classList.contains('spinning') && phSlots) {
+                cell.querySelector('.name').textContent = allNames[Math.floor(Math.random() * allNames.length)];
+            }
+        });
+        clCells.forEach(cell => {
+            if (cell.classList.contains('spinning') && clSlots) {
+                cell.querySelector('.name').textContent = allNames[Math.floor(Math.random() * allNames.length)];
+            }
+        });
+    }, 70);
+
+    // Lock in cells one by one
+    const allLocks = [];
+    ph.forEach((s, i) => allLocks.push({ cell: phCells[i], name: s.name, col: 'ph' }));
+    cl.forEach((s, i) => allLocks.push({ cell: clCells[i], name: s.name, col: 'cl' }));
+
+    // Interleave: alternate ph/cl for drama
+    const interleaved = [];
+    let pi = 0, ci = 0;
+    const phLocks = allLocks.filter(l => l.col === 'ph');
+    const clLocks = allLocks.filter(l => l.col === 'cl');
+    while (pi < phLocks.length || ci < clLocks.length) {
+        if (pi < phLocks.length) interleaved.push(phLocks[pi++]);
+        if (ci < clLocks.length) interleaved.push(clLocks[ci++]);
+    }
+
+    const BASE_DELAY = 800;  // first lock delay
+    const LOCK_INTERVAL = 400; // between each lock
+
+    interleaved.forEach((lock, i) => {
+        setTimeout(() => {
+            lock.cell.classList.remove('spinning');
+            lock.cell.classList.add('locked');
+            lock.cell.querySelector('.name').textContent = lock.name;
+        }, BASE_DELAY + i * LOCK_INTERVAL);
     });
 
-    // Save last order for persistence across tab switches
-    const lastOrder = { timestamp: ts, pharmacists: ph.map(s => s.name), clerks: cl.map(s => s.name) };
-    save(KEYS.lastOrder, lastOrder);
+    // After all locked, show final result
+    const totalTime = BASE_DELAY + interleaved.length * LOCK_INTERVAL + 600;
+    setTimeout(() => {
+        clearInterval(spinInterval);
 
-    showOrder(lastOrder);
+        const ts = new Date().toLocaleString('ja-JP', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
 
-    history.unshift({ id: uid(), timestamp: ts, pharmacists: lastOrder.pharmacists, clerks: lastOrder.clerks });
-    persist();
+        const lastOrder = { timestamp: ts, pharmacists: ph.map(s => s.name), clerks: cl.map(s => s.name) };
+        save(KEYS.lastOrder, lastOrder);
 
-    genHint.textContent = '✓ 生成完了 — 履歴に保存しました';
-    genHint.style.color = 'var(--green)';
-    setTimeout(() => { genHint.textContent = ''; genHint.style.color = ''; }, 2500);
+        rouletteZone.style.display = 'none';
+        showOrder(lastOrder);
+
+        history.unshift({ id: uid(), timestamp: ts, pharmacists: lastOrder.pharmacists, clerks: lastOrder.clerks });
+        persist();
+
+        genHint.textContent = '✓ 生成完了 — 履歴に保存しました';
+        genHint.style.color = 'var(--green)';
+        setTimeout(() => { genHint.textContent = ''; genHint.style.color = ''; }, 2500);
+
+        isGenerating = false;
+        genBtn.style.pointerEvents = '';
+        genBtn.style.opacity = '';
+    }, totalTime);
 }
 
 function showOrder(data) {
